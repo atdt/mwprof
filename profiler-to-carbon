@@ -11,8 +11,6 @@ import re
 import sys
 import logging
 
-#logging.basicConfig(level=logging.DEBUG)
-
 # this should be wherever extractprofile.py is
 sys.path.append('/usr/udpprofile/web')
 from extractprofile import ExtractProfile
