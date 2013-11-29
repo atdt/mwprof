@@ -5,22 +5,25 @@
 # all and stats/all db's into carbon, in one minute moving
 # averages.
 
-import time
-import socket
-import re
-import sys
+
+import argparse
 import logging
+import os
+import re
+import socket
+import sys
+import time
 
-# this should be wherever extractprofile.py is
-sys.path.append('/usr/udpprofile/web')
-from extractprofile import ExtractProfile
+from web.extractprofile import ExtractProfile
 
-profile_host = "professor.pmtpa.wmnet"
-profile_port = 3811
-carbon_host = '127.0.0.1'
-carbon_port = 2003
-dbs =('all', 'stats/all')
-delay = 60
+ap = argparse.ArgumentParser(description='Process some integers.')
+ap.add_argument('--collector-host', default='localhost')
+ap.add_argument('--collector-port', type=int, default=3811)
+ap.add_argument('--carbon-host', default='localhost')
+ap.add_argument('--carbon-port', type=int, default=2003)
+ap.add_argument('--delay', type=int, default=60)
+ap.add_argument('--dbs', type=lambda x: x.split(','), default='all,stats/all')
+globals().update(vars(ap.parse_args()))
 
 invalid = re.compile('[^\w\-]+')
 skips = [re.compile('^Parser.braceSubstitution-title-')]
@@ -112,10 +115,10 @@ def SendStats(db, current, graph):
 while True:
     profsock=SocketSource()
     try:
-        profsock.connect((profile_host,profile_port))
+        profsock.connect((collector_host,collector_port))
     except:
         logging.debug("Couldn't connect to %s on port %d, is collector running?",
-                      profile_host, profile_port)
+                      collector_host, collector_port)
         time.sleep(delay)
         continue
 
@@ -124,7 +127,7 @@ while True:
         graph.connect((carbon_host,carbon_port))
     except:
         logging.debug("Couldn't connect to %s on port %d, is carbon-agent.py running?",
-                      carbon_host, profile_port)
+                      carbon_host, carbon_port)
         time.sleep(delay)
         continue
 
