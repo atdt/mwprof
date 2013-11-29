@@ -1,5 +1,6 @@
 /*
- This is a daemon, that sits on (haha, hardcoded) port 3811,
+ This is a daemon, that sits on port 3811 (overridable by
+ setting a COLLECTOR_PORT environment variable)
  receives profiling events from mediawiki ProfilerSimpleUDP,
  and places them into BerkeleyDB file. \o/
 
@@ -51,7 +52,10 @@ int main(int ac, char **av) {
 	struct pollfd fds[2];
 	
 	/*Initialization*/{
-		port=3811;
+		if (getenv("COLLECTOR_PORT") != NULL)
+		    port=atoi(getenv("COLLECTOR_PORT"));
+		else
+		    port=3811;
 		bzero(&me,sizeof(me));
 		me.sin_family= AF_INET;
 		me.sin_port=htons(port);
