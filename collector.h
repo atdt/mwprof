@@ -2,9 +2,11 @@
 /* $Id: collector.h 102737 2011-11-11 01:52:57Z asher $ */
 
 #include <stdio.h>
-#include <db.h>
+#include <glib.h>
 #define POINTS 300
-DB *db;
+
+GHashTable *table;
+
 
 /* Stats variables, not that generic, are they? */
 struct pfstats {
@@ -18,5 +20,4 @@ struct pfstats {
 	double pf_reals[POINTS];
 };
 
-void dumpData(FILE *);
-
+void dumpData(GHashTable *table, FILE *fd);

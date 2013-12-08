@@ -14,43 +14,33 @@
 #include <string.h>
 #include <unistd.h>
 #include <netinet/in.h>
-#include <db.h>
+#include <glib.h>
 #include "collector.h"
 
-DB *db;
 
-void dumpData(FILE *fd) {
-	DBT key,data;
-	DBC *c;
-	
+void dumpData(GHashTable *table, FILE *fd) {
+	GHashTableIter iter;
+
 	char *p, oldhost[128]="",olddb[128]="",*pp;
 	int indb=0,inhost=0;
 	int i, points;
 
 	struct pfstats *entry;
 
-	bzero(&key,sizeof(key));
-	bzero(&data,sizeof(data));
-	
-	if (db==NULL) {
-		db_create(&db,NULL,0);
-		db->open(db,NULL,"stats.db",NULL,DB_BTREE,0,0);
-	}
-	db->cursor(db,NULL,&c,0);
 	fprintf(fd,"<pfdump>\n");
-	while(c->c_get(c, &key, &data, DB_NEXT )==0) {
-		entry=data.data;
-		p=key.data;
-		/* Get DB */	
+
+	g_hash_table_iter_init(&iter, table);
+	while(g_hash_table_iter_next(&iter, (gpointer) &p, (gpointer) &entry)) {
+		/* Get DB */
 		pp=strsep(&p,":");
 		if (strcmp(pp,olddb)) {
 			if (indb) {
 				fprintf(fd,"</host></db>");
 				inhost=0;
-                                strcpy(oldhost,"");
+				oldhost[0]=0;
 			}
 			fprintf(fd,"<db name=\"%s\">\n",pp);
-			strcpy(olddb,pp);
+			g_strlcpy(olddb,pp,128);
 			indb++;
 		}
 		/* Get Host/Context */
@@ -59,25 +49,25 @@ void dumpData(FILE *fd) {
 			if (inhost)
 				fprintf(fd,"</host>\n");
 			fprintf(fd,"<host name=\"%s\">\n",pp);
-			strcpy(oldhost,pp);
+			g_strlcpy(oldhost,pp,128);
 			inhost++;
 		}
 		/* Get EVENT */
 		fprintf(fd,"<event>\n" \
-				"<eventname><![CDATA[%.*s]]></eventname>\n" \
+				"<eventname><![CDATA[%s]]></eventname>\n" \
 				"<stats count=\"%lu\">\n" \
 				"<cputime total=\"%lf\" totalsq=\"%lf\" />\n" \
 				"<realtime total=\"%lf\" totalsq=\"%lf\" />\n" \
 				"<samples real=\"",
-				(int)(key.size - ((void *)p-(void *)key.data)),p,
+				p,
 				entry->pf_count, entry->pf_cpu, entry->pf_cpu_sq,
 				entry->pf_real, entry->pf_real_sq);
-		if (entry->pf_count >= POINTS) { 
+		if (entry->pf_count >= POINTS) {
 			points = POINTS;
-		} else { 
+		} else {
 			points = entry->pf_count;
 		}
-		for (i=0; i<points-1; i++) { 
+		for (i=0; i<points-1; i++) {
 			fprintf(fd,"%lf ", entry->pf_reals[i]);
 		}
 		fprintf(fd,"%lf", entry->pf_reals[points-1]);
@@ -85,6 +75,5 @@ void dumpData(FILE *fd) {
 				"</stats></event>\n");
 	}
 	fprintf(fd,"</host>\n</db>\n</pfdump>\n");
-	c->c_close(c);
 }
 

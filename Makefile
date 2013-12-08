@@ -5,16 +5,13 @@
 #CFLAGS+=-I/sw/include/
 #LDFLAGS+=-L/sw/lib/
 
-LDLIBS+=-ldb
-CFLAGS+=-Wall -g
+CFLAGS+=-Wall -g $(shell pkg-config --cflags --libs glib-2.0)
+LDLIBS+=$(shell pkg-config --libs glib-2.0)
 
-all: collector exporter
+
+all: collector
 
 collector: collector.c export.c
-
-exporter: export.c exporter.c
-
-#export: collector.h export.c
 
 clean:
 	rm -f collector exporter

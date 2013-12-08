@@ -23,11 +23,9 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <netinet/in.h>
-#include <db.h>
+#include <glib.h>
 #include "collector.h"
 
-void hup();
-void die();
 void child();
 void truncatedb();
 
@@ -48,9 +46,9 @@ int main(int ac, char **av) {
 	int port;
 	struct sockaddr_in me, them;
 	socklen_t sl = sizeof(struct sockaddr_in);
-	
+
 	struct pollfd fds[2];
-	
+
 	/*Initialization*/{
 		if (getenv("COLLECTOR_PORT") != NULL)
 		    port=atoi(getenv("COLLECTOR_PORT"));
@@ -59,7 +57,7 @@ int main(int ac, char **av) {
 		bzero(&me,sizeof(me));
 		me.sin_family= AF_INET;
 		me.sin_port=htons(port);
-	
+
 		s=socket(AF_INET,SOCK_DGRAM,0);
 		bind(s,(struct sockaddr *)&me,sizeof(me));
 
@@ -76,13 +74,8 @@ int main(int ac, char **av) {
 		fds[0].fd = s; fds[0].events |= POLLIN;
 		fds[1].fd = exp, fds[1].events |= POLLIN;
 
-		db_create(&db,NULL,0);
-		db->set_cachesize(db, 0, 512*1024*1024, 0);
-		db->open(db,NULL,"stats.db",NULL,DB_BTREE,DB_CREATE|DB_TRUNCATE,0);
-		
-		signal(SIGHUP,hup);
-		signal(SIGINT,die);
-		signal(SIGTERM,die);
+		table = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
+
 		signal(SIGCHLD,child);
 		signal(SIGUSR1,truncatedb);
 		daemon(1,0);
@@ -91,9 +84,9 @@ int main(int ac, char **av) {
 	for(;;) {
 		n=0;
 		r=poll(fds,2,-1);
-		
+
 		/* Process incoming UDP queue */
-		while(( fds[0].revents & POLLIN ) && 
+		while(( fds[0].revents & POLLIN ) &&
 			((l=recvfrom(s,&buf,1500,0,NULL,NULL))!=-1)) {
 				if (l==EAGAIN)
 					break;
@@ -103,9 +96,9 @@ int main(int ac, char **av) {
 				if (n==5000)
 					break;
 			}
-				
+
 		/* Process incoming TCP queue */
-		while((fds[1].revents & POLLIN ) && 
+		while((fds[1].revents & POLLIN ) &&
 			((r=accept(exp,(struct sockaddr *)&them,&sl))!=-1)) {
 				if (r==EWOULDBLOCK)
 					break;
@@ -123,16 +116,16 @@ void handleMessage(char *buf,ssize_t l) {
 	char task[1024];
 	char stats[] = "stats/";
 	int r;
-	
+
 	struct pfstats incoming;
 	/* db host count cpu cpusq real realsq eventdescription */
-	const char msgformat[]="%127s %127s %ld %lf %lf %lf %lf %1023[^\n]"; 
-	
+	const char msgformat[]="%127s %127s %ld %lf %lf %lf %lf %1023[^\n]";
 
 
-	buf[l]=0;	
+
+	buf[l]=0;
 	pp=buf;
-	
+
 	while((p=strsep(&pp,"\r\n"))) {
 		if (p[0]=='\0')
 			continue;
@@ -161,51 +154,38 @@ void handleMessage(char *buf,ssize_t l) {
 
 void updateEntry(char *dbname, char *hostname, char *task, struct pfstats *incoming) {
 	char keytext[1500];
-	DBT key,data;
-	struct pfstats *old;
+	struct pfstats *entry;
 
 	snprintf(keytext,1499,"%s:%s:%s",dbname,hostname,task);
 
-	bzero(&key,sizeof(key));
-	bzero(&data,sizeof(data));
-	key.data=keytext;
-	key.size=strlen(keytext);
-
 	/* Add new values if exists, put in fresh structure if not */
-	if (db->get(db,NULL,&key,&data,0)==0) {
-		/* Update old stuff */
-		old=data.data;
-		old->pf_count   += incoming->pf_count;
-		old->pf_cpu     += incoming->pf_cpu;
-		old->pf_cpu_sq  += incoming->pf_cpu_sq;
-		old->pf_real    += incoming->pf_real;
-		old->pf_real_sq += incoming->pf_real_sq;
-		old->pf_reals[old->pf_real_pointer] = incoming->pf_real;
-		if (old->pf_real_pointer == POINTS-1) {
-			old->pf_real_pointer = 0;
-		} else { 
-			old->pf_real_pointer++;
-		}
-		db->put(db,NULL,&key,&data,0);	
-	} else {
-		/* Put in fresh data */
-		incoming->pf_real_pointer = 1;
-		incoming->pf_reals[0] = incoming->pf_real;
-		data.data=incoming;
-		data.size=sizeof(*incoming);
-		db->put(db,NULL,&key,&data,0);
+
+	entry = g_hash_table_lookup(table, keytext);
+	if (entry == NULL) {
+		entry = g_malloc0(sizeof(struct pfstats));
+		g_hash_table_insert(table, g_strdup(keytext), entry);
+	} else if (entry->pf_real_pointer == POINTS) {
+		entry->pf_real_pointer = 0;
 	}
+
+	entry->pf_count   += incoming->pf_count;
+	entry->pf_cpu     += incoming->pf_cpu;
+	entry->pf_cpu_sq  += incoming->pf_cpu_sq;
+	entry->pf_real    += incoming->pf_real;
+	entry->pf_real_sq += incoming->pf_real_sq;
+	entry->pf_reals[entry->pf_real_pointer] = incoming->pf_real;
+	entry->pf_real_pointer++;
 }
 
 void handleConnection(int c) {
 	FILE *tmp;
 	char buf[1024];
 	int r;
-	
+
 	shutdown(c,SHUT_RD);
-	
+
 	tmp=tmpfile();
-	dumpData(tmp);
+	dumpData(table, tmp);
 	rewind(tmp);
 	if (fork()) {
 		fclose(tmp);
@@ -222,21 +202,10 @@ void handleConnection(int c) {
 }
 
 /* Event handling */
-void hup() {
-	db->sync(db,0);
-}
-
-void die() {
-	db->sync(db,0);
-	exit(0);
-}
-
 void child() {
-	int status;
-	wait(&status);
+	wait(0);
 }
 
 void truncatedb() {
-	unsigned int count;
-	db->truncate(db,NULL,&count,0);
+	g_hash_table_remove_all(table);
 }
