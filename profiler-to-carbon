@@ -7,6 +7,7 @@
 
 
 import argparse
+import contextlib
 import logging
 import os
 import re
@@ -32,10 +33,6 @@ invalid = re.compile('[^\w\-]+')
 skips = [re.compile('^Parser.braceSubstitution-title-')]
 prior={}
 
-class SocketSource(socket.socket):
-    def read(self,what):
-        enc = self.recv(what,0)
-        return enc.decode('latin-1').encode('utf-8')
 
 def BuildStats(db, fullprofile):
     stats = {}
@@ -85,7 +82,7 @@ def SendStats(db, current, graph):
         if(count <= 0):
             continue
 
-        message = "MediaWiki.%s.%s.count %d %d\n" % (key, count, now)
+        message = "MediaWiki.%s.count %d %d\n" % (key, count, now)
         logging.info("sending: %s", message)
         graph.send(message)
 
@@ -115,34 +112,37 @@ def SendStats(db, current, graph):
         logging.info("sending: %s", message)
         graph.send(message)
 
-while True:
-    profsock=SocketSource()
+
+def get_profiling_xml():
+    collector_socket = socket.socket()
     try:
-        profsock.connect((collector_host,collector_port))
-    except:
-        logging.exception("Couldn't connect to %s on port %d, is collector running?",
-                          collector_host, collector_port)
+        collector_socket.connect((collector_host,collector_port))
+        with contextlib.closing(collector_socket.makefile()) as f:
+            return f.read()
+    finally:
+        try:
+            collector_socket.shutdown(socket.SHUT_RDWR)
+            collector_socket.close()
+        except:
+            pass
+
+
+while True:
+    ep = ExtractProfile()
+    try:
+        ep.extract(get_profiling_xml())
+    except Exception:
+        logging.exception('Failed to extract data from collector.')
         time.sleep(delay)
         continue
 
     graph = socket.socket()
     try:
         graph.connect((carbon_host,carbon_port))
-    except:
-        logging.exception("Couldn't connect to %s on port %d, is carbon-agent.py running?",
-                          carbon_host, carbon_port)
+    except Exception:
+        logging.exception('Failed to connect to carbon')
         time.sleep(delay)
         continue
-
-    try:
-        fullprofile=ExtractProfile().extract(profsock)
-    except Exception as detail:
-        logging.exception("failed extracting data from collector:")
-        time.sleep(delay)
-        continue
-
-    profsock.shutdown(socket.SHUT_RDWR)
-    profsock.close()
 
     current={}
 

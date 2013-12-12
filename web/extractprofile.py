@@ -58,12 +58,10 @@ class ExtractProfile(xml.sax.handler.ContentHandler):
     def getProfile(self):
         return self.profile
 
-    def extract(self, file=False):
-        if (file is False):
-            file = open("profile.xml")
+    def extract(self, buf):
         self.profile={}
         self.inContent=0
-        self.parser.parse(file)
+        self.parser.feed(buf)
         return self.profile
 
 class SocketProfile:
