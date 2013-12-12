@@ -1,0 +1,10 @@
+*.egg
+*.egg-info
+*.kate-swp
+*.pyc
+*~
+.*.swp
+.pylintrc
+.svn
+.tox
+collector
