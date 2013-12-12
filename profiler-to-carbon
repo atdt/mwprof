@@ -82,7 +82,7 @@ def SendStats(db, current, graph):
         if(count <= 0):
             continue
 
-        message = "%s.count %d %d\n" %(key, count, now)
+        message = "MediaWiki.%s.%s.count %d %d\n" % (key, count, now)
         logging.debug("sending: %s", message)
         graph.send(message)
 
@@ -90,7 +90,7 @@ def SendStats(db, current, graph):
             continue
 
         real = current[key]['real'] - prior[db][key]['real']
-        message = "%s.tavg %.3f %d\n" % (key, real / count, now)
+        message = "MediaWiki.%s.tavg %.3f %d\n" % (key, real / count, now)
         logging.debug("sending: %s", message)
         graph.send(message)
 
@@ -100,15 +100,15 @@ def SendStats(db, current, graph):
         tp90 = int(round(len(samples) * 0.9)) - 1
         tp99 = int(round(len(samples) * 0.99)) - 1
 
-        message = "%s.tp50 %.3f %d\n" % (key, float(samples[tp50]) * 1000, now)
+        message = "MediaWiki.%s.tp50 %.3f %d\n" % (key, float(samples[tp50]) * 1000, now)
         logging.debug("sending: %s", message)
         graph.send(message)
 
-        message = "%s.tp90 %.3f %d\n" % (key, float(samples[tp90]) * 1000, now)
+        message = "MediaWiki.%s.tp90 %.3f %d\n" % (key, float(samples[tp90]) * 1000, now)
         logging.debug("sending: %s", message)
         graph.send(message)
 
-        message = "%s.tp99 %.3f %d\n" % (key, float(samples[tp99]) * 1000, now)
+        message = "MediaWiki.%s.tp99 %.3f %d\n" % (key, float(samples[tp99]) * 1000, now)
         logging.debug("sending: %s", message)
         graph.send(message)
 
