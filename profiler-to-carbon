@@ -130,7 +130,7 @@ def get_profiling_xml():
 while True:
     ep = ExtractProfile()
     try:
-        ep.extract(get_profiling_xml())
+        fullprofile = ep.extract(get_profiling_xml())
     except Exception:
         logging.exception('Failed to extract data from collector.')
         time.sleep(delay)

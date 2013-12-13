@@ -38,7 +38,6 @@ int main(int ac, char **av) {
 	ssize_t l;
 	char buf[2000];
 	int r;
-	int n;
 
 	/* Socket variables */
 	int s, exp;
@@ -82,27 +81,23 @@ int main(int ac, char **av) {
 	}
 	/* Loop! loop! loop! */
 	for(;;) {
-		n=0;
 		r=poll(fds,2,-1);
 
 		/* Process incoming UDP queue */
 		while(( fds[0].revents & POLLIN ) &&
+			!( fds[1].revents & POLLIN ) &&
 			((l=recvfrom(s,&buf,1500,0,NULL,NULL))!=-1)) {
 				if (l==EAGAIN)
 					break;
 				handleMessage((char *)&buf,l);
-				n++;
-				/*  Still handle export connections under high load */
-				if (n==5000)
-					break;
 			}
 
 		/* Process incoming TCP queue */
-		while((fds[1].revents & POLLIN ) &&
-			((r=accept(exp,(struct sockaddr *)&them,&sl))!=-1)) {
-				if (r==EWOULDBLOCK)
-					break;
+		if (fds[1].revents & POLLIN) {
+			r = accept(exp, (struct sockaddr *)&them, &sl);
+			if ( r !=-1 && r != EAGAIN ) {
 				handleConnection(r);
+			}
 		}
 	}
 	return(0);
