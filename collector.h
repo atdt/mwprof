@@ -10,14 +10,14 @@ GHashTable *table;
 
 /* Stats variables, not that generic, are they? */
 struct pfstats {
-	unsigned long pf_count;
-	/* CPU time of event */
-	double pf_cpu;
-	double pf_cpu_sq;
-	double pf_real;
-	double pf_real_sq;
-	int pf_real_pointer;
-	double pf_reals[POINTS];
+    unsigned long pf_count;
+    /* CPU time of event */
+    double pf_cpu;
+    double pf_cpu_sq;
+    double pf_real;
+    double pf_real_sq;
+    int pf_real_pointer;
+    double pf_reals[POINTS];
 };
 
 void dumpData(GHashTable *table, FILE *fd);
