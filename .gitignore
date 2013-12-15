@@ -7,4 +7,5 @@
 .pylintrc
 .svn
 .tox
-collector
+mwprof.dSYM
+mwprof

@@ -1,17 +1,9 @@
-# Makefile for profile collector package
-# $Id: Makefile 111618 2012-02-16 04:08:32Z tstarling $
-#
-#MacOSX Fink library paths 
-#CFLAGS+=-I/sw/include/
-#LDFLAGS+=-L/sw/lib/
+CFLAGS+=-Wall -g $(shell pkg-config --cflags --libs glib-2.0 gio-2.0 gthread-2.0 gio-unix-2.0)
+LDLIBS+=$(shell pkg-config --libs glib-2.0 gio-2.0 gthread-2.0 gio-unix-2.0)
 
-CFLAGS+=-Wall -g $(shell pkg-config --cflags --libs glib-2.0)
-LDLIBS+=$(shell pkg-config --libs glib-2.0)
+all: mwprof
 
-
-all: collector
-
-collector: collector.c export.c
+mwprof: mwprof.c collector.c
 
 clean:
-	rm -f collector exporter
+	rm -f mwprof
