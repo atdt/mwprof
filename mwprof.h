@@ -30,7 +30,7 @@ typedef struct CallStats {
 
 void dumpData(FILE *fd);
 void truncateData();
-void handleMessage(char *buffer, ssize_t length);
+void handleMessage(gchar *buffer);
 void updateEntry(char *db, char *host, char *task, CallStats *sample);
 
 #endif  // MWPROF_H_

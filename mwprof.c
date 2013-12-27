@@ -46,31 +46,19 @@ serve_xml(
     FILE *temp;
     GInputStream *in;
     GOutputStream *out;
-    GError *error = NULL;
-
 
     temp = tmpfile();
     g_assert(temp != NULL);
 
     dumpData(temp);
     rewind(temp);
-    if (errno) {
-        g_error("rewind() failed: %s", g_strerror(errno));
-    }
 
-    in = g_unix_input_stream_new(fileno(temp), TRUE);
-
+    in = g_unix_input_stream_new(fileno(temp), FALSE);
     out = g_io_stream_get_output_stream(G_IO_STREAM(connection));
-    g_output_stream_splice(out, in, G_OUTPUT_STREAM_SPLICE_CLOSE_SOURCE |
-                           G_OUTPUT_STREAM_SPLICE_CLOSE_TARGET, NULL, &error);
-    g_assert_no_error(error);
-
-    g_input_stream_close(G_INPUT_STREAM(in), NULL, &error);
-    g_assert_no_error(error);
+    g_output_stream_splice(out, in, G_OUTPUT_STREAM_SPLICE_NONE, NULL, NULL);
 
     g_object_unref(in);
-    g_output_stream_close(out, NULL, &error);
-    g_assert_no_error(error);
+    fclose(temp);
 
     return FALSE;
 }
@@ -83,7 +71,7 @@ listen_stats(gpointer data) {
     GInetAddress *inet_address;
     GSocketAddress *address;
     gint port = GPOINTER_TO_INT(data);
-    gchar buffer[65535] = {0};
+    gchar buf[65535] = {0};
     gssize nbytes;
 
     stats_sock = g_socket_new(G_SOCKET_FAMILY_IPV6, G_SOCKET_TYPE_DATAGRAM,
@@ -99,9 +87,10 @@ listen_stats(gpointer data) {
     g_object_unref(address);
 
     while (TRUE) {
-        nbytes = g_socket_receive(stats_sock, buffer, 65535, NULL, &error);
+        nbytes = g_socket_receive(stats_sock, buf, sizeof(buf)-1, NULL, &error);
         g_assert_no_error(error);
-        handleMessage((char *) &buffer, (ssize_t) nbytes);
+        buf[nbytes] = '\0';
+        handleMessage(buf);
     }
 }
 

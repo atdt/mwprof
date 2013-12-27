@@ -7,55 +7,86 @@
  * License: public domain (as if there's something to protect ;-)
  */
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <glib.h>
 #include "mwprof.h"
 
 /* Decides what to do with sample UDP message */
 void
-handleMessage(gchar *buffer, gssize length) {
-    gchar *p, *pp;
-    gchar host[128];
-    gchar db[128];
-    gchar task[1024];
-    gchar stats[] = "stats/";
-    gint n_fields;
-
+handleMessage(gchar *buffer) {
+    gchar *host, *db, *task;
+    gchar *line, *saveptr, *token;
     CallStats sample;
-    /* db host count cpu cpusq real realsq eventdescription */
-    const char msgformat[]="%127s %127s %ld %lf %lf %lf %lf %1023[^\n]";
-
-    buffer[length] = 0;
-    pp = buffer;
 
     while (TRUE) {
-        p = strsep(&pp, "\r\n");
+        line = strsep(&buffer, "\r\n");
 
-        if (p == NULL) {
+        if (line == NULL) {
             break;
-        } else if (p[0] == '\0') {
+        } else if (line[0] == '\0') {
             continue;
         }
 
-        if (strcmp("-truncate", p) == 0) {
+        if (g_str_has_prefix(buffer, "-truncate")) {
             truncateData();
-            return;
+            continue;
         }
 
         memset(&sample, '\0', sizeof(sample));
-        n_fields = sscanf(p, msgformat, (char *) &db, (char *) &host,
-                          &sample.count, &sample.cpu, &sample.cpu_sq,
-                          &sample.real, &sample.real_sq, (char *) &task);
 
-        if (n_fields < 7) {
+        token = strtok_r(line, " ", &saveptr);
+        if (token == NULL || strnlen(token, 128) > 127) {
+            break;
+        }
+        db = token;
+
+        token = strtok_r(NULL, " ", &saveptr);
+        if (token == NULL || strnlen(token, 128) > 127) {
             continue;
         }
+        host = token;
+
+        token = strtok_r(NULL, " ", &saveptr);
+        if (token == NULL) {
+            continue;
+        }
+        sample.count = strtoull(token, NULL, 10);
+
+        token = strtok_r(NULL, " ", &saveptr);
+        if (token == NULL) {
+            continue;
+        }
+        sample.cpu = g_ascii_strtod(token, NULL);
+
+        token = strtok_r(NULL, " ", &saveptr);
+        if (token == NULL) {
+            continue;
+        }
+        sample.cpu_sq = g_ascii_strtod(token, NULL);
+
+        token = strtok_r(NULL, " ", &saveptr);
+        if (token == NULL) {
+            continue;
+        }
+        sample.real = g_ascii_strtod(token, NULL);
+
+        token = strtok_r(NULL, " ", &saveptr);
+        if (token == NULL) {
+            continue;
+        }
+        sample.real_sq = g_ascii_strtod(token, NULL);
+
+        if (saveptr[0] == '\0' || strnlen(saveptr, 1024) > 1023) {
+            continue;
+        }
+        task = saveptr;
 
         // Update the DB-specific entry
         updateEntry(db, host, task, &sample);
 
         // Update the aggregate entry
-        if (strncmp(db, stats, sizeof(stats)-1) == 0) {
+        if (g_str_has_prefix(db, "stats/")) {
             updateEntry("stats/all", "-", task, &sample);
         } else {
             updateEntry("all", "-", task, &sample);
@@ -69,10 +100,9 @@ updateEntry(gchar *db, gchar *host, gchar *task, CallStats *sample) {
     CallStats *entry;
 
     snprintf(key, sizeof(key) - 1, "%s:%s:%s", db, host, task);
-
     entry = g_hash_table_lookup(table, key);
     if (entry == NULL) {
-        entry = g_malloc0(sizeof(CallStats));
+        entry = g_new0(CallStats, 1);
         g_mutex_init(&entry->mutex);
         g_mutex_lock(&entry->mutex);
         G_LOCK(table);
